@@ -15,19 +15,31 @@ class Ris:
                 Resume_text text
                 )"""
             )
+        self.cur.execute("""
+            CREATE TABLE IF NOT EXISTS skills(
+                skills_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                resume_id INTEGER,
+                skill_name TEXT,
+                FOREIGN KEY(resume_id) REFERENCES resume(resume_id)
+                )"""
+            )
+        
         self.con.commit()
-        self.job_skills = {
-          'python',
-          'sql',
-          'fastapi'  
-        }
         self.skill_list = [
             'python',
             'SQL',
-            'Pandas',
-            'FastAPI',
-            'MongoDB'
+            'pandas',
+            'fastapi',
+            'mongodb'
             ]
+        
+        self.job_skills = input("Enter required skills Separated by comma: ")
+        
+        self.job_skills = {
+            skill.strip().lower()
+            for skill in self.job_skills.split(",")
+            if skill.strip()
+        }
         
     def extract_pdf_text(self,file_path):
         resume_pdf = PdfReader(file_path)
@@ -68,7 +80,11 @@ class Ris:
         name = input("Enter the Candidate Name: ")
         resume_path = input("Enter you Resume Path: ")
         
-        resume = self.extract_text(resume_path)
+        try:
+            resume = self.extract_text(resume_path)
+        except Exception as e:
+            print(e)
+            return
         
         
         self.cur.execute("""
@@ -147,17 +163,105 @@ class Ris:
         }
             
         return compare_skills
-            
     
+    def search_skills(self, skill):
         
+        self.cur.execute("""
+            SELECT resume_id, candidate_name
+            FROM  resume
+            WHERE lower(resume_text) LIKE ?
+            """, (f"%{skill.lower()}%",))
         
+        result = self.cur.fetchall()
         
+        for row in result:
+            print(row)
+            
+    def candidates_ranking(self):
         
+        self.cur.execute("""
+            SELECT resume_id, candidate_name
+            FROM resume
+            """)
         
+        data = self.cur.fetchall()
         
+        rankings = []
+        
+        for resume_id, name in data:
+            score = self.job_description(resume_id)["score"]
+            
+            rankings.append((name, score))
+            
+            
+        rankings.sort(
+            key=lambda x: x[1],
+            reverse=True
+        )
+        return rankings
+    
+    def statistics(self):
+        
+        self.cur.execute("""
+            SELECT COUNT(*)
+            FROM resume
+            """)
+        total = self.cur.fetchone()[0]
+        
+        self.cur.execute("""
+            SELECT candidate_name, resume_id
+            FROM resume
+            """,)
+        
+        data = self.cur.fetchall()
+        
+        scores = []
+        
+        for name, resume_id in data:
+            score = self.job_description(resume_id)['score']
+            scores.append(score)
+            
+        avg_score = sum(scores) / len(scores) if scores else 0
+        
+        print(f"Total Resume: {total}")
+        print(f"Average ATS Score: {avg_score:.2f}")            
+    
+    def skill_statistics(self):
+        skill_count = {}
+        
+        for skill in self.skill_list:
+            skill_count[skill] = 0
+            
+        self.cur.execute("""
+            SELECT resume_text
+            FROM resume
+            """)  
+        
+        resumes = self.cur.fetchall()
+        
+        for resume in resumes:
+            
+            text = resume[0].lower()
+            
+            for skill in self.skill_list:
+                if skill in text:
+                    skill_count[skill] += 1
+                    
+        return skill_count
+
+    
+    
+    
+    
+    
+    
+    
 ris = Ris()
 # ris.add_resume()
 # ris.view_resume()
 # print(ris.extract_skills())
-print(ris.job_description(1))
+# print(ris.job_description(1))
+# ris.search_skills('python')
+# ris.statistics()
+print(ris.skill_statistics())
 ris.close()
